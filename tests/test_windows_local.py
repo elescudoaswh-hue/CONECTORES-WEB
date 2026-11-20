@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, patch
 
 from analizador.analysis import analyze_report
 from analizador.core.engine import InitialReportReader
-from windows_local import HOST, LOCAL_HEADER, SCHEME, VERSION, create_local_app, install, site_origin
+from windows_local import (
+    EXTENSION_ORIGIN, HOST, LOCAL_HEADER, NATIVE_EXECUTABLE, NATIVE_HOST,
+    SCHEME, VERSION, create_local_app, install, site_origin,
+)
 from windows_service import METRICS
 from workbook_factory import make_report
 
@@ -116,6 +119,7 @@ class LocalAppTests(unittest.TestCase):
         (source / "runtime").mkdir(parents=True)
         (source / "runtime" / "python.exe").touch()
         (source / "windows_local.py").touch()
+        (source / NATIVE_EXECUTABLE).touch()
         profile = self.root / "Perfil local"
         registry = MagicMock()
         win32com = ModuleType("win32com")
@@ -126,16 +130,26 @@ class LocalAppTests(unittest.TestCase):
             patch("builtins.input", return_value=ORIGIN), patch("builtins.print"), \
             patch.dict("os.environ", {"LOCALAPPDATA": str(profile)}):
             install()
+        paths = []
         for call in registry.CreateKey.call_args_list:
             hive, path = call.args
             self.assertIs(hive, registry.HKEY_CURRENT_USER)
-            self.assertTrue(path.startswith(rf"Software\Classes\{SCHEME}"))
+            paths.append(path)
+        self.assertEqual(set(paths), {
+            rf"Software\Classes\{SCHEME}",
+            rf"Software\Classes\{SCHEME}\shell\open\command",
+            rf"Software\Google\Chrome\NativeMessagingHosts\{NATIVE_HOST}",
+            rf"Software\Microsoft\Edge\NativeMessagingHosts\{NATIVE_HOST}",
+        })
         installed = profile / "ConectoresYazaki" / "GeneradorLocal" / VERSION
         self.assertEqual(json.loads((installed / "sitio.json").read_text()), {"origin": ORIGIN})
-        self.assertEqual(
-            registry.SetValueEx.call_args.args[-1],
+        self.assertIn(
             f'"{installed / "runtime" / "python.exe"}" "{installed / "windows_local.py"}" "%1"',
+            [call.args[-1] for call in registry.SetValueEx.call_args_list],
         )
+        manifest = json.loads((installed / f"{NATIVE_HOST}.json").read_text())
+        self.assertEqual(manifest["path"], str(installed / NATIVE_EXECUTABLE))
+        self.assertEqual(manifest["allowed_origins"], [EXTENSION_ORIGIN])
 
 
 if __name__ == "__main__":

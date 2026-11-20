@@ -16,8 +16,11 @@ from werkzeug.wrappers import Response
 
 from windows_service import UPLOAD_LIMIT, create_app
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SCHEME = "conectores-dxf"
+NATIVE_HOST = "com.conectores_yazaki.generador"
+EXTENSION_ORIGIN = "chrome-extension://aclgejkdghnapkoegdmciammdjgpolpn/"
+NATIVE_EXECUTABLE = "ConectoresNative.exe"
 PORT = 8766
 HOST = f"127.0.0.1:{PORT}"
 LOCAL_HEADER = "X-Conectores-Local"
@@ -108,6 +111,21 @@ def package_folder():
     return Path(__file__).resolve().parent
 
 
+def register_native_host(winreg, destination):
+    manifest = destination / f"{NATIVE_HOST}.json"
+    manifest.write_text(json.dumps({
+        "name": NATIVE_HOST,
+        "description": "Generador de Conectores Yazaki",
+        "path": str(destination / NATIVE_EXECUTABLE),
+        "type": "stdio",
+        "allowed_origins": [EXTENSION_ORIGIN],
+    }), encoding="utf-8")
+    for browser in (r"Google\Chrome", r"Microsoft\Edge"):
+        key_path = rf"Software\{browser}\NativeMessagingHosts\{NATIVE_HOST}"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(manifest))
+
+
 def install():
     import win32com.client
     import winreg
@@ -117,7 +135,7 @@ def install():
     base.mkdir(parents=True, exist_ok=True)
     destination = base / VERSION
     source = package_folder()
-    if not (source / "runtime" / "python.exe").is_file():
+    if not (source / "runtime" / "python.exe").is_file() or not (source / NATIVE_EXECUTABLE).is_file():
         raise ValueError("Extrae todos los archivos del ZIP del lanzador antes de instalar.")
     if not destination.exists():
         with TemporaryDirectory(prefix="instalacion-", dir=base) as temp:
@@ -136,22 +154,43 @@ def install():
         winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command") as key:
         winreg.SetValueEx(key, "", 0, winreg.REG_SZ, command)
-    print(f"Instalación lista para {origin}. Vuelve a la web y pulsa Abrir lanzador.")
+    register_native_host(winreg, destination)
+    print(f"Instalación lista para {origin}. Vuelve a la web para generar el DXF.")
+
+
+def configured_origin():
+    configuration = json.loads((package_folder() / "sitio.json").read_text(encoding="utf-8"))
+    return site_origin(configuration["origin"])
+
+
+def get_local_server(origin, workspace):
+    app, pool = create_local_app(origin, workspace)
+    try:
+        server = create_server(app, host="127.0.0.1", port=PORT, max_request_body_size=UPLOAD_LIMIT)
+    except Exception:
+        pool.shutdown(wait=True)
+        raise
+    return server, pool
+
+
+def port_in_use(error):
+    return error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048
 
 
 def run_local():
-    origin = json.loads((package_folder() / "sitio.json").read_text(encoding="utf-8"))["origin"]
+    origin = configured_origin()
     with TemporaryDirectory(prefix="conectores_local_") as workspace:
-        app, pool = create_local_app(origin, workspace)
         try:
-            server = create_server(app, host="127.0.0.1", port=PORT, max_request_body_size=UPLOAD_LIMIT)
-            print("Generador local de Conectores Yazaki", flush=True)
-            print(f"Listo para recibir trabajos de {origin}", flush=True)
-            print("Mantén esta ventana abierta mientras generas el DXF.", flush=True)
-            server.run()
+            server, pool = get_local_server(origin, workspace)
         except OSError as error:
-            if error.errno != errno.EADDRINUSE and getattr(error, "winerror", None) != 10048:
-                raise
+            if port_in_use(error):
+                return
+            raise
+        print("Generador local de Conectores Yazaki", flush=True)
+        print(f"Listo para recibir trabajos de {origin}", flush=True)
+        print("Mantén esta ventana abierta mientras generas el DXF.", flush=True)
+        try:
+            server.run()
         finally:
             pool.shutdown(wait=True)
 

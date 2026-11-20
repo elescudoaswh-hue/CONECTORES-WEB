@@ -2,6 +2,7 @@
 
 import argparse
 from hashlib import file_digest
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -22,7 +23,19 @@ def sha256(path):
         return file_digest(file, "sha256").hexdigest()
 
 
-def package(destination, cache):
+def compile_native_host(package_root, cache, go):
+    environment = os.environ | {
+        "GOOS": "windows", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOCACHE": str(cache / "go-build"),
+    }
+    subprocess.run([
+        go, "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w -H=windowsgui",
+        "-o", str(package_root / "ConectoresNative.exe"), str(ROOT / "windows_native_host" / "main.go"),
+    ], env=environment, check=True)
+    go_root = subprocess.check_output([go, "env", "GOROOT"], text=True).strip()
+    shutil.copyfile(Path(go_root) / "LICENSE", package_root / "runtime" / "Go-LICENSE.txt")
+
+
+def package(destination, cache, go):
     cache.mkdir(parents=True, exist_ok=True)
     python_zip = cache / PYTHON_ZIP
     if not python_zip.exists():
@@ -58,8 +71,9 @@ def package(destination, cache):
         for wheel in wheels:
             with ZipFile(wheel) as archive:
                 archive.extractall(site_packages)
-        for name in ("windows_local.py", "windows_service.py"):
+        for name in ("windows_local.py", "windows_native.py", "windows_service.py"):
             shutil.copyfile(ROOT / name, package_root / name)
+        compile_native_host(package_root, cache.resolve(), go)
         shutil.copytree(ROOT / "analizador", package_root / "analizador", ignore=shutil.ignore_patterns("__pycache__"))
         script = "INSTALAR_GENERADOR_LOCAL.bat"
         (package_root / script).write_text(
@@ -76,5 +90,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
     parser.add_argument("--cache", type=Path, required=True)
+    parser.add_argument("--go", default="go", help="Ruta al compilador Go")
     arguments = parser.parse_args()
-    package(arguments.output, arguments.cache)
+    package(arguments.output, arguments.cache, arguments.go)

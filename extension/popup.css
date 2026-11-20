@@ -1,0 +1,24 @@
+:root { color-scheme: light dark; }
+body {
+  box-sizing: border-box;
+  width: 310px;
+  margin: 0;
+  padding: 16px;
+  font: 14px/1.45 system-ui, sans-serif;
+  background: Canvas;
+  color: CanvasText;
+}
+h1 { margin: 0 0 8px; font-size: 18px; }
+p { margin: 10px 0 0; overflow-wrap: anywhere; }
+#site { margin: 0 0 12px; }
+button {
+  border: 0;
+  border-radius: 5px;
+  padding: 9px 12px;
+  background: #2766a8;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: .65; cursor: default; }
+button:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }

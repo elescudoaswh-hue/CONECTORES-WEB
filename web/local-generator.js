@@ -1,4 +1,5 @@
 import { dxfApi, localMode } from "./dxf.js";
+import { startWithExtension } from "./extension-bridge.js";
 
 export async function localHealth(signal) {
   const limit = AbortSignal.timeout(3000);
@@ -7,7 +8,7 @@ export async function localHealth(signal) {
   });
 }
 
-export function showLocalGenerator({ forJob = false } = {}) {
+export function showLocalGenerator({ forJob = false, message } = {}) {
   const dialog = document.getElementById("local-generator-dialog");
   const site = document.getElementById("local-site-address");
   const status = document.getElementById("local-generator-status");
@@ -18,7 +19,7 @@ export function showLocalGenerator({ forJob = false } = {}) {
   let checking = false;
 
   site.value = window.location.origin;
-  status.textContent = forJob ? "Abre el lanzador para continuar con este DXF." : "";
+  status.textContent = message || (forJob ? "Abre el lanzador para continuar con este DXF." : "");
 
   function update(message) {
     if (!controller.signal.aborted) status.textContent = message;
@@ -89,7 +90,15 @@ export async function ensureLocalGenerator() {
   try {
     health = await localHealth();
   } catch {
-    return showLocalGenerator({ forJob: true });
+    const extension = await startWithExtension();
+    if (!extension?.ok) return showLocalGenerator({ forJob: true, message: extension?.message });
+    try {
+      health = await localHealth();
+    } catch {
+      return showLocalGenerator({
+        forJob: true, message: "La extensión inició el lanzador. Confirma el acceso local y pulsa Comprobar conexión.",
+      });
+    }
   }
   if (!health.autocad) throw new Error("Para generar DXF se necesita AutoCAD en este equipo Windows.");
   return true;

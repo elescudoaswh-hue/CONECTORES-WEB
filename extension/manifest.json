@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Conectores Yazaki · AutoCAD local",
+  "description": "Conecta la web de Conectores con el generador DXF de esta PC.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "105",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxdUQpRN01WwmTeuxzkBAIb7ZjS787kKmZBOOJJrbIqO4KHdRxuXBES/b4wx9e6bY9TZrQXDaK8lGo8WZU5aXIzsPTSlqHPCLZru8vLrKxbnFrGgu0YtSPx/+5Iz99wxSezmwA28hQy9sWZPHb7fehLdgXprliqeEaUEh9kGcYgSEtfGFVNJpXJDCCLpI3HG6ZnFPqYabQnDcRGUTusNS5iU9xWiRtC2P4GjOQ5VsFiIA20dQnddBvMkEf23c5421aaxVTShX8gwnKcR42VJe2h+oLilpeTjbB5LpDaZyH37bWOkQTIe01p6tycC17W/9sb/UCUzS/5azVVOq1faTNQIDAQAB",
+  "permissions": ["activeTab", "nativeMessaging", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" }
+}

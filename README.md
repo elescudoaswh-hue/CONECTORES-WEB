@@ -21,7 +21,16 @@ En cada equipo Windows de 64 bits con AutoCAD, sigue estos pasos con tu cuenta d
 2. Extrae todos los archivos. Ejecuta **`INSTALAR_GENERADOR_LOCAL.bat`** y pega la dirección. El lanzador incluye su propio Python y queda instalado en el perfil del usuario. Puedes instalarlo con una cuenta estándar de Windows.
 3. Abre la web publicada por HTTPS en Chrome o Edge. Usa **Generar DXF**. Si la web pide iniciar el lanzador, pulsa **Abrir lanzador** y permite la apertura y la conexión local cuando el navegador lo solicite. AutoCAD se abre en el escritorio al recibir el trabajo. Deja abierta la ventana del lanzador hasta descargar el archivo.
 
-El lanzador acepta trabajos de la dirección HTTPS que indicaste en la instalación. Para cambiarla, cierra el lanzador, ejecuta de nuevo el instalador e introduce la nueva dirección.
+El lanzador acepta trabajos de la dirección HTTPS que indicaste en la instalación. Para cambiarla, cierra el lanzador o el navegador si usas la extensión. Ejecuta de nuevo el instalador e introduce la nueva dirección.
+
+### Activar el lanzador con la extensión de Chrome o Edge
+
+1. Instala o actualiza el lanzador de Windows desde **AutoCAD de esta PC → Configurar**. La versión 1.1 registra la conexión con la extensión en tu perfil de Windows.
+2. Descarga y extrae el ZIP de la extensión. En `chrome://extensions` o `edge://extensions`, activa **Modo desarrollador**, pulsa **Cargar descomprimida** y elige la carpeta que contiene `manifest.json`. [Extensión de Conectores](https://raw.githubusercontent.com/elescudoaswh-hue/CONECTORES-WEB/main/web/descargas/Conectores-AutoCAD-Chrome-Edge.zip)
+3. Abre la web de Conectores. Pulsa el icono de la extensión, elige **Vincular este sitio** y confirma el permiso para esa dirección.
+4. Pulsa **Generar DXF** en la web. La extensión inicia el lanzador en segundo plano y AutoCAD se abre al recibir el trabajo. Si el navegador te pide acceso a la red local, concédelo para comunicar la web con el lanzador de tu PC.
+
+La extensión recibe la orden de iniciar el generador. El navegador entrega los archivos seleccionados al generador local y recibe el DXF desde la misma PC.
 
 ## Publicar en Cloudflare Workers
 
@@ -57,4 +66,4 @@ python -m unittest discover -s tests -v
 
 El primer comando prepara el paquete de Cloudflare y valida la configuración en modo de prueba. Las pruebas de Python cubren la lectura de reportes, colores, accesorios, bloqueos, selección y el flujo de descarga con un generador de prueba.
 
-El ZIP del lanzador se genera con `python scripts/package_local_launcher.py Conectores-Generador-Local-Windows.zip --cache .cache`. El empaquetado usa el intérprete portátil de Python para Windows y comprueba los hashes de las dependencias.
+El ZIP del lanzador se genera con `python scripts/package_local_launcher.py Conectores-Generador-Local-Windows.zip --cache .cache --go ruta/al/compilador/go`. El empaquetado compila el proceso de conexión de la extensión, usa el intérprete portátil de Python para Windows y comprueba los hashes de las dependencias.
