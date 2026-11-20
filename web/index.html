@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Analiza Initial Reports, asigna colores y genera dibujos DXF de conectores Yazaki.">
+  <title>Analizador de Conectores Yazaki</title>
+  <script src="./theme.js"></script>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1><span class="header-mark" aria-hidden="true">◇</span> Analizador de Conectores Yazaki</h1>
+    <div class="header-actions">
+      <span class="version">Versión 0.7.4</span>
+      <div class="theme-switch" role="group" aria-label="Tema de la interfaz">
+        <button type="button" data-theme-choice="light" aria-pressed="false">Claro</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Oscuro</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="files-panel" aria-labelledby="files-title">
+      <h2 id="files-title">Archivos y configuración</h2>
+      <div class="file-fields">
+        <label for="report-name">Initial Report</label>
+        <input id="report-name" class="field" placeholder="Selecciona un reporte .xlsx" readonly>
+        <button class="button select-file" type="button" data-picker="report-file" aria-label="Seleccionar Initial Report">Seleccionar</button>
+
+        <label for="database-name">Base de familias</label>
+        <input id="database-name" class="field" placeholder="Selecciona una base .json" readonly>
+        <button class="button select-file" type="button" data-picker="database-file" aria-label="Seleccionar base de familias">Seleccionar</button>
+
+        <label for="drawings-name">Carpeta DWG</label>
+        <input id="drawings-name" class="field" placeholder="Selecciona la carpeta de dibujos .dwg o .dxf" readonly>
+        <button class="button select-file" type="button" data-picker="drawings-folder" aria-label="Seleccionar carpeta DWG">Seleccionar</button>
+
+        <label for="output-name">Salida DXF</label>
+        <input id="output-name" class="field" placeholder="Nombre del archivo de descarga" spellcheck="false" maxlength="196">
+        <button class="button secondary" type="button" id="reset-output">Restablecer</button>
+      </div>
+      <input id="report-file" type="file" accept=".xlsx" hidden>
+      <input id="database-file" type="file" accept=".json,application/json" hidden>
+      <input id="drawings-folder" type="file" webkitdirectory multiple hidden>
+
+      <div class="family-fields">
+        <label for="family-name">Familia</label>
+        <input id="family-name" class="field" list="family-options" placeholder="Selecciona o escribe una familia" autocomplete="off">
+        <datalist id="family-options"></datalist>
+        <label for="groups">Colores unidos</label>
+        <input id="groups" class="field" value="ROSA+VERDE;CAFE;AZUL" spellcheck="false">
+        <button class="button" type="button" id="apply-family">Aplicar familia</button>
+      </div>
+    </section>
+
+    <div class="task-actions" role="group" aria-label="Acciones de análisis">
+      <button class="button" type="button" id="configure-colors">1. Configurar colores</button>
+      <button class="button" type="button" id="analyze">2. Analizar y contar</button>
+      <button class="button" type="button" id="export-json">Guardar base JSON</button>
+      <button class="button" type="button" id="generate">3. Generar DXF</button>
+    </div>
+
+    <section class="results-section" aria-label="Resultados del análisis">
+      <div class="tabs" role="tablist" aria-label="Resultados">
+        <button class="button secondary" type="button" id="tab-summary" role="tab" aria-controls="summary" aria-selected="true">Resumen</button>
+        <button class="button secondary" type="button" id="tab-connectors" role="tab" aria-controls="connectors" aria-selected="false" tabindex="-1">Conectores</button>
+        <button class="button secondary" type="button" id="tab-validation" role="tab" aria-controls="validation" aria-selected="false" tabindex="-1">Validación</button>
+      </div>
+
+      <div class="results-panel">
+        <section id="summary" class="result-page" role="tabpanel" aria-labelledby="tab-summary" tabindex="0">
+          <div class="table-scroll">
+            <table aria-label="Resumen por plantilla">
+              <thead><tr>
+                <th scope="col">Plantilla</th><th scope="col">Colores</th><th scope="col">Configuraciones</th>
+                <th scope="col">Posiciones</th><th scope="col">Dibujos únicos</th>
+                <th scope="col">Encontrados</th><th scope="col">Faltantes</th>
+              </tr></thead>
+              <tbody id="summary-rows"></tbody>
+            </table>
+            <p class="empty" id="summary-empty">Carga el reporte y ejecuta Analizar y contar.</p>
+          </div>
+        </section>
+
+        <section id="connectors" class="result-page" role="tabpanel" aria-labelledby="tab-connectors" tabindex="0" hidden>
+          <div class="selection-toolbar">
+            <div class="selection-actions" role="group" aria-label="Selección de conectores">
+              <button class="button" type="button" id="select-all" disabled>Todos</button>
+              <button class="button" type="button" id="select-none" disabled>Ninguno</button>
+              <button class="button" type="button" id="select-highlighted" disabled>Solo resaltados</button>
+            </div>
+            <span id="selection-count" aria-live="polite">0 de 0 seleccionados</span>
+          </div>
+          <div class="table-scroll">
+            <table aria-label="Conectores por plantilla">
+              <thead><tr>
+                <th scope="col">Generar</th><th scope="col">Plantilla</th><th scope="col">Conector</th>
+                <th scope="col">Número de parte</th><th scope="col">Tipo</th><th scope="col">Archivo DWG / DXF</th>
+              </tr></thead>
+              <tbody id="connector-rows"></tbody>
+            </table>
+            <p class="empty" id="connectors-empty">Los conectores aparecerán aquí después del análisis.</p>
+          </div>
+          <p class="table-help">Marca la casilla Generar. Usa Ctrl o Mayús para resaltar varias filas y Solo resaltados para conservarlas.</p>
+        </section>
+
+        <section id="validation" class="result-page validation" role="tabpanel" aria-labelledby="tab-validation" tabindex="0" hidden>
+          <pre id="validation-log">Carga el reporte y ejecuta Analizar y contar para ver la validación.</pre>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="status-bar" role="status" aria-live="polite" aria-atomic="true">
+    <span id="status">Carga un Initial Report para comenzar</span>
+  </footer>
+
+  <dialog id="colors-dialog" aria-labelledby="colors-title">
+    <form method="dialog" class="dialog-shell" id="colors-form">
+      <h2 id="colors-title">Asignar números / configuraciones por colores</h2>
+      <p class="dialog-instruction">Selecciona uno o varios números o códigos para asignarles un color.</p>
+      <div class="table-scroll colors-table">
+        <table aria-label="Configuraciones del reporte">
+          <thead><tr>
+            <th scope="col"><input type="checkbox" id="all-parts" aria-label="Seleccionar todas las configuraciones"></th>
+            <th scope="col">Número / configuración</th><th scope="col">Encabezado del reporte</th>
+            <th scope="col">Color asignado</th>
+          </tr></thead>
+          <tbody id="color-rows"></tbody>
+        </table>
+      </div>
+      <div id="palette" class="palette" aria-label="Colores disponibles"></div>
+      <div class="custom-color" id="custom-color" hidden>
+        <label for="custom-color-name">Nombre del color</label>
+        <input class="field" id="custom-color-name" maxlength="50">
+        <button class="button" type="button" id="assign-custom-color">Asignar</button>
+      </div>
+      <p class="dialog-status" id="color-status" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button" type="button" id="save-colors">Guardar asignación</button>
+        <button class="button secondary" value="cancel">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="notice-dialog" class="notice-dialog" aria-labelledby="notice-title">
+    <form method="dialog" class="dialog-shell">
+      <h2 id="notice-title"></h2>
+      <p id="notice-text" class="notice-text"></p>
+      <div id="notice-downloads" class="download-actions" hidden>
+        <a class="button" id="download-dxf" download>Descargar DXF</a>
+        <a class="button secondary" id="download-detail" download>Descargar reporte</a>
+      </div>
+      <div class="dialog-actions">
+        <button class="button secondary" id="notice-cancel" value="cancel" hidden>Cancelar</button>
+        <button class="button" id="notice-ok" value="accept">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
