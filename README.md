@@ -17,7 +17,7 @@ El navegador recuerda el tema, la familia, el nombre de salida y los últimos ar
 
 En cada equipo Windows de 64 bits con AutoCAD, sigue estos pasos con tu cuenta de Windows.
 
-1. En la web, elige **AutoCAD de esta PC** y pulsa **Configurar**. Copia la dirección que aparece y descarga el ZIP. [Lanzador local para Windows](https://github.com/elescudoaswh-hue/CONECTORES-WEB/releases/download/lanzador-local-v1.0.0/Conectores-Generador-Local-Windows.zip)
+1. En la web, elige **AutoCAD de esta PC** y pulsa **Configurar**. Copia la dirección que aparece y descarga el ZIP. [Lanzador local para Windows](https://raw.githubusercontent.com/elescudoaswh-hue/CONECTORES-WEB/main/web/descargas/Conectores-Generador-Local-Windows.zip)
 2. Extrae todos los archivos. Ejecuta **`INSTALAR_GENERADOR_LOCAL.bat`** y pega la dirección. El lanzador incluye su propio Python y queda instalado en el perfil del usuario. Puedes instalarlo con una cuenta estándar de Windows.
 3. Abre la web publicada por HTTPS en Chrome o Edge. Usa **Generar DXF**. Si la web pide iniciar el lanzador, pulsa **Abrir lanzador** y permite la apertura y la conexión local cuando el navegador lo solicite. AutoCAD se abre en el escritorio al recibir el trabajo. Deja abierta la ventana del lanzador hasta descargar el archivo.
 
