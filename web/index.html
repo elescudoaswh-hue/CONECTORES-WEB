@@ -43,6 +43,13 @@
         <label for="output-name">Salida DXF</label>
         <input id="output-name" class="field" placeholder="Nombre del archivo de descarga" spellcheck="false" maxlength="196">
         <button class="button secondary" type="button" id="reset-output">Restablecer</button>
+
+        <label for="generator-mode">Generador DXF</label>
+        <select class="field" id="generator-mode">
+          <option value="local">AutoCAD de esta PC</option>
+          <option value="server">Generador en red</option>
+        </select>
+        <button class="button secondary" type="button" id="configure-local-generator">Configurar</button>
       </div>
       <input id="report-file" type="file" accept=".xlsx" hidden>
       <input id="database-file" type="file" accept=".json,application/json" hidden>
@@ -155,10 +162,32 @@
       <div id="notice-downloads" class="download-actions" hidden>
         <a class="button" id="download-dxf" download>Descargar DXF</a>
         <a class="button secondary" id="download-detail" download>Descargar reporte</a>
+        <p id="download-status" class="dialog-status" role="status"></p>
       </div>
       <div class="dialog-actions">
         <button class="button secondary" id="notice-cancel" value="cancel" hidden>Cancelar</button>
         <button class="button" id="notice-ok" value="accept">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="local-generator-dialog" class="notice-dialog" aria-labelledby="local-generator-title">
+    <form method="dialog" class="dialog-shell">
+      <h2 id="local-generator-title">Generador local de AutoCAD</h2>
+      <p>En Windows, descarga y extrae el ZIP. Ejecuta <strong>INSTALAR_GENERADOR_LOCAL.bat</strong> una vez y pega la dirección de esta página cuando te la pida.</p>
+      <label for="local-site-address">Dirección para el instalador</label>
+      <div class="local-site-field">
+        <input id="local-site-address" class="field" readonly>
+        <button class="button secondary" type="button" id="copy-local-site">Copiar dirección</button>
+      </div>
+      <div class="download-actions">
+        <a class="button secondary" href="https://github.com/elescudoaswh-hue/CONECTORES-WEB/releases/download/lanzador-local-v1.0.0/Conectores-Generador-Local-Windows.zip">Descargar lanzador</a>
+        <a class="button" id="open-local-generator" href="conectores-dxf://start">Abrir lanzador</a>
+        <button class="button secondary" type="button" id="check-local-generator">Comprobar conexión</button>
+      </div>
+      <p class="dialog-status" id="local-generator-status" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button secondary" value="cancel">Cerrar</button>
       </div>
     </form>
   </dialog>

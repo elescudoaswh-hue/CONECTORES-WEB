@@ -1,5 +1,7 @@
 import { loadSettings, saveSettings } from "./settings.js";
 import { scanDirectory, scanFileList, readDrawingFiles } from "./drawings.js";
+import { dxfApi, dxfFetch, localMode, serverMode, storedJob } from "./dxf.js";
+import { ensureLocalGenerator, showLocalGenerator } from "./local-generator.js";
 
 const element = (id) => document.getElementById(id);
 const familyInput = element("family-name");
@@ -8,11 +10,13 @@ const outputInput = element("output-name");
 const colorsDialog = element("colors-dialog");
 const noticeDialog = element("notice-dialog");
 const generateButton = element("generate");
+const generatorMode = element("generator-mode");
+const configureLocal = element("configure-local-generator");
 const drawingsInput = element("drawings-folder");
 const drawingsName = element("drawings-name");
 const alternatePicker = element("alternate-drawings-picker");
 const tabButtons = [...document.querySelectorAll('[role="tab"]')];
-const taskControls = [...document.querySelectorAll(".files-panel button, .files-panel input, .task-actions button")];
+const taskControls = [...document.querySelectorAll(".files-panel button, .files-panel input, .files-panel select, .task-actions button")];
 const jobStorageKey = "conectores-web-generacion";
 const maxUpload = 94 * 1024 * 1024;
 
@@ -37,7 +41,7 @@ let busy = false;
 let folderSelectionQueued = false;
 let activeJob;
 try {
-  activeJob = sessionStorage.getItem(jobStorageKey);
+  activeJob = storedJob(sessionStorage.getItem(jobStorageKey));
 } catch {
   activeJob = null;
 }
@@ -80,7 +84,7 @@ function setBusy(value) {
   }
 }
 
-function notice(title, message, { confirm, job } = {}) {
+function notice(title, message, { confirm, job, mode } = {}) {
   element("notice-title").textContent = title;
   element("notice-text").textContent = message;
   element("notice-cancel").hidden = !confirm;
@@ -88,6 +92,7 @@ function notice(title, message, { confirm, job } = {}) {
   element("notice-downloads").hidden = !job;
   if (job) {
     const route = `/api/jobs/${encodeURIComponent(job.id)}`;
+    element("download-status").textContent = "";
     const download = element("download-dxf");
     download.href = `${route}/download`;
     download.download = job.output;
@@ -95,6 +100,11 @@ function notice(title, message, { confirm, job } = {}) {
     detail.href = `${route}/report`;
     detail.removeAttribute("download");
     detail.hidden = !job.hasDetail;
+    download.onclick = detail.onclick = null;
+    if (mode === localMode) {
+      prepareLocalDownload(download, `${route}/download`, job.output);
+      prepareLocalDownload(detail, `${route}/report`, job.output.replace(/\.dxf$/i, "") + "_REPORTE_GENERACION.txt");
+    }
   }
   noticeDialog.returnValue = "";
   return new Promise((resolve) => {
@@ -121,7 +131,7 @@ async function runTask(title, task) {
 function remember() {
   return saveSettings({
     reportFile, databaseFile, family: familyInput.value.trim(),
-    groups: groupsInput.value, output: outputInput.value.trim(),
+    groups: groupsInput.value, output: outputInput.value.trim(), generatorMode: generatorMode.value,
   });
 }
 
@@ -529,43 +539,59 @@ async function exportDatabase() {
   const family = familyInput.value.trim() || "FAMILIA";
   const result = await analyze({ exportFamily: family });
   const blob = new Blob([JSON.stringify(result.database, null, 2) + "\n"], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `Base_${fileStem(family, "FAMILIA")}.json`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  status(`Base guardada: ${link.download}`);
+  const filename = `Base_${fileStem(family, "FAMILIA")}.json`;
+  downloadBlob(blob, filename);
+  status(`Base guardada: ${filename}`);
 }
 
-function setActiveJob(id) {
-  activeJob = id;
-  generateButton.textContent = id ? "Consultar DXF" : "3. Generar DXF";
+function downloadBlob(blob, filename) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function prepareLocalDownload(link, path, filename) {
+  link.href = "#";
+  link.removeAttribute("download");
+  link.onclick = async (event) => {
+    event.preventDefault();
+    if (link.getAttribute("aria-disabled") === "true") return;
+    const progress = element("download-status");
+    link.setAttribute("aria-disabled", "true");
+    progress.textContent = "Preparando la descarga…";
+    try {
+      const response = await dxfFetch(localMode, path);
+      if (!response.ok) throw new Error("El archivo ya no está disponible en el lanzador.");
+      downloadBlob(await response.blob(), filename);
+      progress.textContent = "";
+    } catch {
+      progress.textContent = `No se pudo descargar ${filename}. Comprueba que el lanzador esté abierto.`;
+    } finally {
+      link.removeAttribute("aria-disabled");
+    }
+  };
+}
+
+function setActiveJob(job) {
+  activeJob = job;
+  generateButton.textContent = job ? "Consultar DXF" : "3. Generar DXF";
   try {
-    if (id) sessionStorage.setItem(jobStorageKey, id);
+    if (job) sessionStorage.setItem(jobStorageKey, JSON.stringify(job));
     else sessionStorage.removeItem(jobStorageKey);
   } catch {
     // Se conserva el trabajo durante la visita.
   }
 }
 
-async function api(path, options) {
-  const response = await fetch(path, { cache: "no-store", ...options });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !Object.keys(payload).length) {
-    const error = new Error(payload.message || `El generador DXF no pudo procesar la solicitud (HTTP ${response.status}).`);
-    error.status = response.status;
-    throw error;
-  }
-  return payload;
-}
-
-async function watchJob(job) {
+async function watchJob(job, mode) {
   let retries = 0;
   while (job.status === "queued" || job.status === "running") {
     status(job.message);
     await new Promise((resolve) => setTimeout(resolve, retries ? 3000 : 1200));
     try {
-      job = await api(`/api/jobs/${encodeURIComponent(job.id)}`);
+      job = await dxfApi(mode, `/api/jobs/${encodeURIComponent(job.id)}`);
       retries = 0;
     } catch (error) {
       if (error.status === 404) {
@@ -580,14 +606,17 @@ async function watchJob(job) {
   status(job.message);
   const reportText = [job.summary, ...job.messages];
   if (job.extraMessages) reportText.push(`… y ${job.extraMessages} avisos más en el reporte.`);
-  await notice("DXF generado", reportText.join("\n"), { job });
+  await notice("DXF generado", reportText.join("\n"), { job, mode });
 }
 
 async function generateDxf() {
   if (activeJob) {
-    await watchJob({ id: activeJob, status: "running", message: "Consultando el trabajo de AutoCAD…" });
+    const { id, mode } = activeJob;
+    if (mode === localMode && !(await ensureLocalGenerator())) return;
+    await watchJob({ id, status: "running", message: "Consultando el trabajo de AutoCAD…" }, mode);
     return;
   }
+  const mode = generatorMode.value;
   if (!drawings) throw new Error("Selecciona la carpeta con los conectores.");
   await analyze();
   const selected = connectorRows.filter((row) => selectedKeys.has(row.key));
@@ -607,10 +636,17 @@ async function generateDxf() {
   const paths = [...new Set(selected.map((row) => row.drawing).filter(Boolean))];
   const files = await readDrawingFiles(drawings, paths);
   if (reportFile.size + files.reduce((total, file) => total + file.size, 0) > maxUpload) {
-    throw new Error("La carga supera el límite para Cloudflare. Divide la selección de conectores en varias generaciones.");
+    throw new Error("Los archivos superan el límite del generador. Divide la selección de conectores en varias generaciones.");
   }
-  const health = await api("/api/health");
-  if (!health.autocad) throw new Error("El generador requiere Windows con AutoCAD y pywin32.");
+  if (mode === localMode) {
+    if (!(await ensureLocalGenerator())) {
+      status("Generación DXF cancelada.");
+      return;
+    }
+  } else {
+    const health = await dxfApi(mode, "/api/health");
+    if (!health.autocad) throw new Error("El generador en red requiere Windows con AutoCAD y pywin32.");
+  }
   let output = outputInput.value.trim() || defaultOutput();
   if (!output.toLowerCase().endsWith(".dxf")) output += ".dxf";
   outputInput.value = output;
@@ -621,11 +657,11 @@ async function generateDxf() {
     selected: selected.map((row) => row.key), allowMissing: missing.length > 0,
   }));
   for (const file of files) body.append("drawings", file, file.name);
-  status("Enviando los archivos seleccionados al generador DXF…");
-  const job = await api("/api/jobs", { method: "POST", body });
-  setActiveJob(job.id);
+  status(mode === localMode ? "Iniciando AutoCAD en esta PC…" : "Enviando los dibujos al generador en red…");
+  const job = await dxfApi(mode, "/api/jobs", { method: "POST", body });
+  setActiveJob({ id: job.id, mode });
   void remember();
-  await watchJob(job);
+  await watchJob(job, mode);
 }
 
 for (const tab of tabButtons) {
@@ -668,6 +704,11 @@ element("reset-output").addEventListener("click", () => {
   void remember();
 });
 for (const input of [familyInput, groupsInput, outputInput]) input.addEventListener("change", remember);
+generatorMode.addEventListener("change", () => {
+  configureLocal.hidden = generatorMode.value !== localMode;
+  void remember();
+});
+configureLocal.addEventListener("click", () => void showLocalGenerator());
 
 element("apply-family").addEventListener("click", () => void runTask("Base de familias", () => applySelectedFamily(true)));
 element("configure-colors").addEventListener("click", openColors);
@@ -715,6 +756,8 @@ async function restore() {
     familyInput.value = saved.family || "";
     groupsInput.value = saved.groups ?? groupsInput.value;
     outputInput.value = saved.output || "";
+    generatorMode.value = saved.generatorMode === serverMode ? serverMode : localMode;
+    configureLocal.hidden = generatorMode.value !== localMode;
     if (saved.databaseFile) {
       try {
         await openDatabase(saved.databaseFile, { restore: true });
@@ -732,11 +775,9 @@ async function restore() {
   } finally {
     setBusy(false);
   }
-  if (activeJob && /^[\w-]{32}$/.test(activeJob)) {
-    setActiveJob(activeJob);
+  setActiveJob(activeJob);
+  if (activeJob?.mode === serverMode) {
     void runTask("Generación DXF", generateDxf);
-  } else {
-    setActiveJob(null);
   }
 }
 

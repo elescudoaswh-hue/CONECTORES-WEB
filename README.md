@@ -9,9 +9,19 @@ Versión web del programa **Crear Conectores y sus Colores**. Incluye el diseño
 3. Revisa **Colores unidos**, por ejemplo `ROSA+VERDE;CAFE;AZUL`, y pulsa **Analizar y contar**. En **Validación** aparecen los conectores faltantes, los duplicados, las cavidades bloqueadas y las variantes.
 4. En **Conectores**, marca las posiciones que quieres generar. Usa **Guardar base JSON** para descargar la asignación y el conteo. Usa **Generar DXF** para procesar la selección y descargar el dibujo cuando termine.
 
-El análisis de Excel, la base JSON y la búsqueda de dibujos se ejecutan en el navegador. Al generar un DXF se envían el Initial Report y los dibujos elegidos al equipo Windows. El servidor retira los archivos de entrada tras el trabajo y conserva el resultado para descarga durante dos horas. La carga por generación admite hasta 94 MiB de archivos. Para cargas mayores, selecciona los conectores en varios lotes.
+El análisis de Excel, la base JSON y la búsqueda de dibujos se ejecutan en el navegador. **AutoCAD de esta PC** entrega el Initial Report y los dibujos seleccionados al lanzador dentro de la misma computadora. **Generador en red** los envía al Windows conectado mediante el túnel. El generador retira los archivos de entrada tras el trabajo y conserva el resultado para descarga durante dos horas mientras se mantiene abierto. La carga por generación admite hasta 94 MiB de archivos. Para cargas mayores, selecciona los conectores en varios lotes.
 
 El navegador recuerda el tema, la familia, el nombre de salida y los últimos archivos de Excel y JSON cuando permite almacenamiento local. Selecciona de nuevo la carpeta DWG al reabrir la aplicación. El nombre de **Salida DXF** se usa para la descarga a través del navegador.
+
+## Generar con AutoCAD de esta PC
+
+En cada equipo Windows de 64 bits con AutoCAD, sigue estos pasos con tu cuenta de Windows.
+
+1. En la web, elige **AutoCAD de esta PC** y pulsa **Configurar**. Copia la dirección que aparece y descarga el ZIP. [Lanzador local para Windows](https://github.com/elescudoaswh-hue/CONECTORES-WEB/releases/download/lanzador-local-v1.0.0/Conectores-Generador-Local-Windows.zip)
+2. Extrae todos los archivos. Ejecuta **`INSTALAR_GENERADOR_LOCAL.bat`** y pega la dirección. El lanzador incluye su propio Python y queda instalado en el perfil del usuario. Puedes instalarlo con una cuenta estándar de Windows.
+3. Abre la web publicada por HTTPS en Chrome o Edge. Usa **Generar DXF**. Si la web pide iniciar el lanzador, pulsa **Abrir lanzador** y permite la apertura y la conexión local cuando el navegador lo solicite. AutoCAD se abre en el escritorio al recibir el trabajo. Deja abierta la ventana del lanzador hasta descargar el archivo.
+
+El lanzador acepta trabajos de la dirección HTTPS que indicaste en la instalación. Para cambiarla, cierra el lanzador, ejecuta de nuevo el instalador e introduce la nueva dirección.
 
 ## Publicar en Cloudflare Workers
 
@@ -20,6 +30,8 @@ El navegador recuerda el tema, la familia, el nombre de salida y los últimos ar
 3. El repositorio selecciona Node.js 24 con `.node-version`. Inicia el despliegue y abre la URL que te dé Cloudflare. Podrás analizar Excel y JSON desde ese momento. [Integración de Git con Workers](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
 ### Conectar el generador DXF
+
+Para usar un equipo Windows compartido, selecciona **Generador en red** en la web y configura ese equipo con estos pasos.
 
 1. En un equipo **Windows** con **AutoCAD** y **Python 3.12 de 64 bits**, abre AutoCAD y ejecuta `INICIAR_GENERADOR.bat` desde la misma sesión de Windows. El lanzador prepara Python y solicita el token del servicio. Usa un token aleatorio que puedas volver a introducir cuando reinicies el generador.
 2. Configura un **Cloudflare Tunnel** en ese equipo y dirige su nombre de host, por ejemplo `dxf.tu-dominio.com`, al servicio local `http://127.0.0.1:8765`. Mantén el generador iniciado en la sesión de Windows para que pueda controlar AutoCAD. [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/).
@@ -44,3 +56,5 @@ python -m unittest discover -s tests -v
 ```
 
 El primer comando prepara el paquete de Cloudflare y valida la configuración en modo de prueba. Las pruebas de Python cubren la lectura de reportes, colores, accesorios, bloqueos, selección y el flujo de descarga con un generador de prueba.
+
+El ZIP del lanzador se genera con `python scripts/package_local_launcher.py Conectores-Generador-Local-Windows.zip --cache .cache`. El empaquetado usa el intérprete portátil de Python para Windows y comprueba los hashes de las dependencias.
