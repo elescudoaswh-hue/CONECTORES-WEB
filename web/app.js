@@ -1,4 +1,5 @@
 import { loadSettings, saveSettings } from "./settings.js";
+import { scanDirectory, scanFileList, readDrawingFiles } from "./drawings.js";
 
 const element = (id) => document.getElementById(id);
 const familyInput = element("family-name");
@@ -7,6 +8,9 @@ const outputInput = element("output-name");
 const colorsDialog = element("colors-dialog");
 const noticeDialog = element("notice-dialog");
 const generateButton = element("generate");
+const drawingsInput = element("drawings-folder");
+const drawingsName = element("drawings-name");
+const alternatePicker = element("alternate-drawings-picker");
 const tabButtons = [...document.querySelectorAll('[role="tab"]')];
 const taskControls = [...document.querySelectorAll(".files-panel button, .files-panel input, .task-actions button")];
 const jobStorageKey = "conectores-web-generacion";
@@ -21,6 +25,7 @@ let databaseFile;
 let families = [];
 let assignments = {};
 let drawings = null;
+let folderLabel = "";
 let connectorRows = [];
 let selectedKeys = new Set();
 let highlightedKeys = new Set();
@@ -29,6 +34,7 @@ let selectionInitialized = false;
 let colorDraft = {};
 let colorRows = [];
 let busy = false;
+let folderSelectionQueued = false;
 let activeJob;
 try {
   activeJob = sessionStorage.getItem(jobStorageKey);
@@ -68,6 +74,10 @@ function status(message) {
 function setBusy(value) {
   busy = value;
   for (const control of taskControls) control.disabled = value;
+  if (!value && folderSelectionQueued) {
+    folderSelectionQueued = false;
+    queueMicrotask(readDrawingSelection);
+  }
 }
 
 function notice(title, message, { confirm, job } = {}) {
@@ -236,14 +246,76 @@ async function openDatabase(file, { restore = false } = {}) {
   if (!restore) void remember();
 }
 
-function chooseDrawings(files) {
-  if (files.length === 0) return;
-  const root = (files[0].webkitRelativePath || "Carpeta seleccionada").split("/")[0];
-  drawings = new Map([...files]
-    .filter((file) => /\.(dwg|dxf)$/i.test(file.name))
-    .map((file) => [file.webkitRelativePath || file.name, file]));
-  element("drawings-name").value = `${root} · ${drawings.size} dibujos`;
-  status(`Carpeta seleccionada: ${drawings.size} archivos DWG / DXF. Ejecuta Analizar y contar.`);
+function folderProgress(checked, total) {
+  const count = checked.toLocaleString();
+  const progress = total === undefined ? count : `${count} de ${total.toLocaleString()}`;
+  drawingsName.value = `Leyendo carpeta… ${progress} archivos revisados`;
+  status(`Leyendo carpeta de conectores. Archivos revisados: ${progress}.`);
+}
+
+function saveDrawings(folder) {
+  drawings = folder.drawings;
+  folderLabel = `${folder.root} · ${drawings.size.toLocaleString()} dibujos DWG / DXF`;
+  drawingsName.value = folderLabel;
+  if (drawings.size) {
+    status(`Carpeta lista: ${drawings.size.toLocaleString()} dibujos en ${folder.checked.toLocaleString()} archivos revisados. Pulsa Analizar y contar.`);
+  } else {
+    status(`Se revisaron ${folder.checked.toLocaleString()} archivos. Elige una carpeta que contenga dibujos .dwg o .dxf.`);
+  }
+}
+
+function pickDrawingsWithFileInput() {
+  if (busy) return;
+  drawingsInput.value = "";
+  drawingsName.value = "Esperando la confirmación del navegador…";
+  status("Selecciona la carpeta de conectores y confirma Cargar.");
+  drawingsInput.click();
+}
+
+function readDrawingSelection() {
+  if (busy) {
+    folderSelectionQueued = true;
+    return;
+  }
+  const files = drawingsInput.files;
+  void runTask("Carpeta DWG", async () => {
+    try {
+      if (!files.length) throw new Error("El navegador devolvió una selección vacía. Elige la carpeta que contiene los dibujos.");
+      folderProgress(0, files.length);
+      saveDrawings(await scanFileList(files, folderProgress));
+    } catch (error) {
+      drawingsName.value = folderLabel;
+      throw error;
+    } finally {
+      drawingsInput.value = "";
+    }
+  });
+}
+
+function pickDrawings() {
+  if (!window.isSecureContext || window.top !== window || typeof window.showDirectoryPicker !== "function") {
+    pickDrawingsWithFileInput();
+    return;
+  }
+  void runTask("Carpeta DWG", async () => {
+    drawingsName.value = "Esperando la carpeta…";
+    status("Selecciona la carpeta donde están los dibujos de los conectores.");
+    let directory;
+    try {
+      directory = await window.showDirectoryPicker({ mode: "read", id: "conectores-dwg" });
+      folderProgress(0);
+      saveDrawings(await scanDirectory(directory, folderProgress));
+      alternatePicker.hidden = true;
+    } catch (error) {
+      drawingsName.value = folderLabel;
+      alternatePicker.hidden = false;
+      if (!directory && error.name === "AbortError") {
+        status("La selección se cerró. Puedes elegir la carpeta de nuevo o usar Selector alternativo.");
+        return;
+      }
+      throw new Error("El navegador no pudo leer la carpeta de conectores. Comprueba que esté accesible o usa Selector alternativo.", { cause: error });
+    }
+  });
 }
 
 function openColors() {
@@ -424,10 +496,21 @@ function missingPreview(rows, count) {
 async function analyze({ notify = false, exportFamily } = {}) {
   if (!report) throw new Error("Primero carga el Initial Report.");
   status("Analizando y contando conectores…");
-  const result = await runEngine("analyze", {
+  const payload = {
     assignments, groups: groupsInput.value, exportFamily,
-    drawings: drawings ? [...drawings].map(([path, file]) => ({ path, modified: file.lastModified })) : null,
-  });
+    drawings: drawings ? [...drawings].map(([path, entry]) => ({ path, modified: entry.lastModified ?? null })) : null,
+  };
+  let result = await runEngine("analyze", payload);
+  if (result.drawingsNeedingDates) {
+    const paths = result.drawingsNeedingDates;
+    status("Comparando las fechas de los dibujos duplicados…");
+    const files = await readDrawingFiles(drawings, paths);
+    const dates = new Map(paths.map((path, index) => [path, files[index].lastModified]));
+    for (const drawing of payload.drawings) {
+      if (dates.has(drawing.path)) drawing.modified = dates.get(drawing.path);
+    }
+    result = await runEngine("analyze", payload);
+  }
   renderAnalysis(result);
   void remember();
   if (notify && drawings) {
@@ -520,7 +603,9 @@ async function generateDxf() {
       { confirm: "Generar DXF" });
     if (!approved) return;
   }
-  const files = [...new Set(selected.map((row) => drawings.get(row.drawing)).filter(Boolean))];
+  status("Preparando los dibujos seleccionados…");
+  const paths = [...new Set(selected.map((row) => row.drawing).filter(Boolean))];
+  const files = await readDrawingFiles(drawings, paths);
   if (reportFile.size + files.reduce((total, file) => total + file.size, 0) > maxUpload) {
     throw new Error("La carga supera el límite para Cloudflare. Divide la selección de conectores en varias generaciones.");
   }
@@ -570,9 +655,13 @@ element("database-file").addEventListener("change", (event) => {
   event.target.value = "";
   if (file) void runTask("Base de familias", () => openDatabase(file));
 });
-element("drawings-folder").addEventListener("change", (event) => {
-  chooseDrawings(event.target.files);
-  event.target.value = "";
+element("select-drawings").addEventListener("click", pickDrawings);
+alternatePicker.addEventListener("click", pickDrawingsWithFileInput);
+drawingsInput.addEventListener("change", readDrawingSelection);
+drawingsInput.addEventListener("cancel", () => {
+  folderSelectionQueued = false;
+  drawingsName.value = folderLabel;
+  status("El navegador cerró la selección de carpeta. Puedes volver a intentarlo.");
 });
 element("reset-output").addEventListener("click", () => {
   outputInput.value = defaultOutput();

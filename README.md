@@ -5,7 +5,7 @@ Versión web del programa **Crear Conectores y sus Colores**. Incluye el diseño
 ## Uso
 
 1. Selecciona el **Initial Report** en formato `.xlsx` y, si tienes una, la **base de familias** `.json`. Una coincidencia completa y única aplica la familia automáticamente. También puedes elegir una familia o asignar colores a mano.
-2. Selecciona la **carpeta DWG**. Se admiten subcarpetas y dibujos `.dwg` o `.dxf`. Puedes analizar el reporte antes de elegir una carpeta.
+2. Selecciona la **carpeta DWG** y espera a que aparezca **Carpeta lista** con el total de dibujos. Se admiten subcarpetas y archivos `.dwg` o `.dxf`. Si el navegador lo pide, concede permiso de lectura o confirma **Cargar**. Puedes analizar el reporte antes de elegir una carpeta.
 3. Revisa **Colores unidos**, por ejemplo `ROSA+VERDE;CAFE;AZUL`, y pulsa **Analizar y contar**. En **Validación** aparecen los conectores faltantes, los duplicados, las cavidades bloqueadas y las variantes.
 4. En **Conectores**, marca las posiciones que quieres generar. Usa **Guardar base JSON** para descargar la asignación y el conteo. Usa **Generar DXF** para procesar la selección y descargar el dibujo cuando termine.
 

@@ -35,7 +35,10 @@
 
         <label for="drawings-name">Carpeta DWG</label>
         <input id="drawings-name" class="field" placeholder="Selecciona la carpeta de dibujos .dwg o .dxf" readonly>
-        <button class="button select-file" type="button" data-picker="drawings-folder" aria-label="Seleccionar carpeta DWG">Seleccionar</button>
+        <div class="folder-picker">
+          <button class="button select-file" type="button" id="select-drawings" aria-label="Seleccionar carpeta DWG">Seleccionar</button>
+          <button class="button secondary" type="button" id="alternate-drawings-picker" hidden>Selector alternativo</button>
+        </div>
 
         <label for="output-name">Salida DXF</label>
         <input id="output-name" class="field" placeholder="Nombre del archivo de descarga" spellcheck="false" maxlength="196">

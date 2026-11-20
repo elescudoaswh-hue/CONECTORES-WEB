@@ -121,6 +121,8 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 }
 .file-fields, .family-fields { display: grid; align-items: center; gap: 7px 14px; }
 .file-fields { grid-template-columns: 115px minmax(0, 1fr) 112px; }
+.folder-picker { display: grid; gap: 4px; }
+#alternate-drawings-picker { padding-inline: 6px; }
 .family-fields {
   margin-top: 12px;
   grid-template-columns: auto minmax(8rem, 1fr) auto minmax(8rem, 1fr) auto;

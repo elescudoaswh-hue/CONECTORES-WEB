@@ -61,6 +61,22 @@ class WebTests(unittest.TestCase):
         }), None))
         self.assertEqual(result["database"]["_origen"]["archivo"], "Mi reporte original.xlsx")
 
+    def test_directory_handles_need_dates_only_for_duplicate_required_drawings(self):
+        paths = [
+            "DB/7289656830.dxf", "DB/7289656830.dwg", "DB/Otros/7289656830 (1).DWG",
+            "DB/11111111.dwg", "DB/Otros/11111111 (1).DWG",
+        ]
+        drawings = [{"path": path, "modified": None} for path in paths]
+        pending = analyze_report(self.report, ASSIGNMENTS, GROUPS, drawings)
+        self.assertEqual(pending, {"drawingsNeedingDates": sorted(paths[1:3])})
+
+        drawings[1]["modified"] = 100
+        drawings[2]["modified"] = 220
+        result = analyze_report(self.report, ASSIGNMENTS, GROUPS, drawings)
+        self.assertEqual(result["connectors"][0]["drawing"], paths[2])
+        self.assertEqual(result["missingCount"], 0)
+        self.assertIn("ARCHIVOS EXTRA EN CARPETA: 2", result["validation"])
+
     def test_job_downloads_the_selected_drawing_with_its_report(self):
         calls = []
 

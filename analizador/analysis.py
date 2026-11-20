@@ -1,5 +1,6 @@
 """Análisis de la versión web con las reglas del motor 0.7.4."""
 
+from collections import Counter
 from pathlib import Path
 
 from analizador.core.engine import (
@@ -56,10 +57,18 @@ def analyze_report(report, assignments, expression, drawings, export_family=None
         for component in requirement.unique_components
     }
     scanned = drawings is not None
+    dates = {Path(item["path"]): item.get("modified") for item in (drawings or [])}
     matches, extras = match_connector_files(
-        ((Path(item["path"]), item["modified"]) for item in (drawings or [])),
-        required,
+        ((path, modified if modified is not None else 0) for path, modified in dates.items()), required,
     )
+    pending_dates = set()
+    for paths in matches.values():
+        formats = Counter(path.suffix.lower() for path in paths)
+        pending_dates.update(
+            path.as_posix() for path in paths if formats[path.suffix.lower()] > 1 and dates[path] is None
+        )
+    if pending_dates:
+        return {"drawingsNeedingDates": sorted(pending_dates)}
     summary = []
     connectors = []
     missing_rows = []
